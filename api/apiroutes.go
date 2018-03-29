@@ -972,13 +972,44 @@ func (c *appContext) getAddressTransactions(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, txs, c.getIndentQuery(r))
 }
 
+func (c *appContext) getAddressTransactionsRaw2(w http.ResponseWriter, r *http.Request) {
+	txs, err := c.getAddressTransactionsRawCommon(w, r)
+	if err != nil {
+		return
+	}
+
+	for i, tx := range txs {
+		for j := range tx.Vin {
+			txs[i].Vin[j].PrevOut = nil
+			txs[i].Vin[j].ScriptSig = nil
+			txs[i].Vin[j].BlockIndex = nil
+			txs[i].Vin[j].BlockHeight = nil
+			txs[i].Vin[j].Coinbase = ""
+			txs[i].Vin[j].Stakebase = ""
+		}
+		for j := range tx.Vout {
+			txs[i].Vout[j].ScriptPubKeyDecoded.Addresses = nil
+			txs[i].Vout[j].ScriptPubKeyDecoded.Asm = ""
+		}
+	}
+	writeJSON(w, txs, c.getIndentQuery(r))
+}
+
 func (c *appContext) getAddressTransactionsRaw(w http.ResponseWriter, r *http.Request) {
+	txs, err := c.getAddressTransactionsRawCommon(w, r)
+	if err != nil {
+		return
+	}
+	writeJSON(w, txs, c.getIndentQuery(r))
+}
+
+func (c *appContext) getAddressTransactionsRawCommon(w http.ResponseWriter, r *http.Request) ([]*apitypes.AddressTxRaw, error) {
 	address := m.GetAddressCtx(r)
 	count := m.GetNCtx(r)
 	skip := m.GetMCtx(r)
 	if address == "" {
 		http.Error(w, http.StatusText(422), 422)
-		return
+		return nil, fmt.Errorf(http.StatusText(422))
 	}
 	if count <= 0 {
 		count = 10
@@ -991,9 +1022,9 @@ func (c *appContext) getAddressTransactionsRaw(w http.ResponseWriter, r *http.Re
 	txs := c.BlockData.GetAddressTransactionsRawWithSkip(address, count, skip)
 	if txs == nil {
 		http.Error(w, http.StatusText(422), 422)
-		return
+		return nil, fmt.Errorf(http.StatusText(422))
 	}
-	writeJSON(w, txs, c.getIndentQuery(r))
+	return txs, nil
 }
 
 func (c *appContext) StakeVersionLatestCtx(next http.Handler) http.Handler {
