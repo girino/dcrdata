@@ -1077,10 +1077,14 @@ func isRevoke(t *apitypes.AddressTxRaw) bool {
 }
 
 func isTicket(t *apitypes.AddressTxRaw) bool {
-	switch t.Vout[0].ScriptPubKeyDecoded.Type {
-	case "stakesubmission":
-	case "sstxcommitment":
-	case "sstxchange":
+	a := t.Vout[0].ScriptPubKeyDecoded.Type
+	if a == "stakesubmission" { 
+		return true
+	}
+	if a == "sstxcommitment" { 
+		return true
+	}
+	if a == "sstxchange" { 
 		return true
 	}
 	return false
