@@ -161,6 +161,13 @@ func NewAPIRouter(app *appContext, userRealIP bool) apiMux {
 		})
 	})
 
+	mux.Route("/match", func(r chi.Router) {
+		r.Route("/{address}", func(rd chi.Router) {
+			rd.Use(m.AddressPathCtx)
+			rd.With((middleware.Compress(1))).Get("/", app.getAddressTransactionsMatched)
+		})
+	})
+
 	mux.Route("/mempool", func(r chi.Router) {
 		r.Get("/", http.NotFound /*app.getMempoolOverview*/)
 		// ticket purchases

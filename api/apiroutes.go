@@ -983,7 +983,6 @@ func (c *appContext) getAddressTransactionsRaw2(w http.ResponseWriter, r *http.R
 			txs[i].Vin[j].PrevOut = nil
 			txs[i].Vin[j].ScriptSig = nil
 			txs[i].Vin[j].BlockIndex = nil
-			txs[i].Vin[j].BlockHeight = nil
 			txs[i].Vin[j].Coinbase = ""
 			txs[i].Vin[j].Stakebase = ""
 		}
@@ -1001,6 +1000,149 @@ func (c *appContext) getAddressTransactionsRaw(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, txs, c.getIndentQuery(r))
+}
+
+func getTicketPrices(t *apitypes.AddressTxRaw) (txfee float64, price float64, vintotal float64, vouttotal float64) {
+
+	txfee = 0
+	price = 0
+	vintotal = 0
+	vouttotal = 0
+
+	for _, vin := range t.Vin {
+		vintotal = vintotal + *vin.AmountIn
+	}
+	for _, vout := range t.Vout {
+		vouttotal = vouttotal + vout.Value
+		if vout.ScriptPubKeyDecoded.Type == "stakesubmission" {
+			price = price + vout.Value
+		}
+	}
+	txfee = vintotal - vouttotal
+	return txfee, price, vintotal, vouttotal
+}
+
+func getRevokeReturns(t *apitypes.AddressTxRaw) (reward float64, poolfee float64, total float64) {
+	var vintotal float64
+	var vouttotal float64
+
+	poolfee = 0
+	vintotal = 0
+	vouttotal = 0
+
+	for _, vin := range t.Vin {
+		vintotal = vintotal + *vin.AmountIn
+	}
+	for _, vout := range t.Vout {
+		vouttotal = vouttotal + vout.Value
+		if vout.ScriptPubKeyDecoded.Type == "stakerevoke" && vout.Value < 0.1 {
+			poolfee = poolfee + vout.Value
+		}
+	}
+	reward = vouttotal - vintotal
+
+	return reward, poolfee, vouttotal
+}
+
+func getVoteReturns(t *apitypes.AddressTxRaw) (reward float64, poolfee float64, total float64) {
+	var vintotal float64
+	var vouttotal float64
+
+	poolfee = 0
+	vintotal = 0
+	vouttotal = 0
+	reward = 0
+
+	for _, vin := range t.Vin {
+		vintotal = vintotal + *vin.AmountIn
+		if vin.Stakebase != "" {
+			reward = reward + *vin.AmountIn
+		}
+	}
+	for _, vout := range t.Vout {
+		vouttotal = vouttotal + vout.Value
+		if vout.ScriptPubKeyDecoded.Type == "stakegen" && vout.Value < 0.1 {
+			poolfee = poolfee + vout.Value
+		}
+	}
+
+	return reward, poolfee, vouttotal
+}
+
+func isRevoke(t *apitypes.AddressTxRaw) bool {
+	if t.Vout[0].ScriptPubKeyDecoded.Type == "stakerevoke" {
+		return true
+	}
+	return false
+}
+
+func isTicket(t *apitypes.AddressTxRaw) bool {
+	switch t.Vout[0].ScriptPubKeyDecoded.Type {
+	case "stakesubmission":
+	case "sstxcommitment":
+	case "sstxchange":
+		return true
+	}
+	return false
+}
+
+func (c *appContext) getAddressTransactionsMatched(w http.ResponseWriter, r *http.Request) {
+	address := m.GetAddressCtx(r)
+	if address == "" {
+		http.Error(w, http.StatusText(422), 422)
+		return
+	}
+	txs := c.BlockData.GetAddressTransactionsRawWithSkip(address, 8000, 0)
+	if txs == nil {
+		http.Error(w, http.StatusText(422), 422)
+		return
+	}
+	vinTxidMap := make(map[string]*apitypes.AddressTxRaw, len(txs))
+	matches := make([]*apitypes.AddressTicketsMatched, 0, len(txs))
+
+	// build maps
+	for _, tx := range txs {
+		for _, vin := range tx.Vin {
+			vinTxidMap[vin.Txid] = tx
+		}
+	}
+	// finds out tickets
+	for _, ticket := range txs {
+		if isTicket(ticket) {
+			var match *apitypes.AddressTicketsMatched
+			txfee, price, vintotal, _ := getTicketPrices(ticket)
+			match = new(apitypes.AddressTicketsMatched)
+			match.BuyTxID = ticket.TxID
+			match.BuyTime = ticket.Time
+			match.TicketPrice = price
+			match.TotalInvestment = vintotal
+			match.TicketFee = txfee
+			match.Status = "live"
+
+			// finds vote or revoke
+			vote, ok := vinTxidMap[ticket.TxID]
+			if ok {
+				if isRevoke(vote) {
+					match.Status = "revoked"
+					match.Reward, match.FeeStakepool, match.ReturnTotal = getRevokeReturns(vote)
+				} else {
+					match.Status = "voted"
+					match.Reward, match.FeeStakepool, match.ReturnTotal = getVoteReturns(vote)
+				}
+				match.ReturnTxID = vote.TxID
+				match.ReturnTime = vote.Time
+				// } else {
+				// 	match.ReturnTxID = ""
+				// 	match.ReturnTime = 0
+				// 	match.Reward = 0.0
+				// 	match.FeeStakepool = 0.0
+				// 	match.ReturnTotal = 0.0
+			}
+			matches = append(matches, match)
+		}
+	}
+
+	writeJSON(w, matches, c.getIndentQuery(r))
 }
 
 func (c *appContext) getAddressTransactionsRawCommon(w http.ResponseWriter, r *http.Request) ([]*apitypes.AddressTxRaw, error) {
