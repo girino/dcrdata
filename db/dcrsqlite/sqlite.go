@@ -351,6 +351,7 @@ func InitDB(dbInfo *DBInfo, shutdown func()) (*DB, error) {
 	// github.com/mattn/go-sqlite3@acfa60124032040b9f5a9406f5a772ee16fe845e
 	//
 	// db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(1)
 
 	// These are db-wide settings that persist for the entire session.
 	_, err = db.Exec(SetCacheSizeSQL)
