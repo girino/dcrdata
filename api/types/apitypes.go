@@ -355,6 +355,21 @@ type AddressTotals struct {
 	CoinsUnspent float64 `json:"dcr_unspent"`
 }
 
+// AddressTicketsMatched
+type AddressTicketsMatched struct {
+	BuyTxID         string  `json:"buytxid"`
+	BuyTime         TimeAPI   `json:"buytime"`
+	TicketPrice     float64 `json:"ticketprice"`
+	TicketFee       float64 `json:"ticketfee"`
+	TotalInvestment float64 `json:"totalinvestment"`
+	Status          string  `json:"status"`
+	ReturnTxID      string  `json:"returntxid"`
+	ReturnTime      TimeAPI   `json:"returntime"`
+	Reward          float64 `json:"reward"`
+	FeeStakepool    float64 `json:"feestakepool"`
+	ReturnTotal     float64 `json:"returntotal"`
+}
+
 // BlockDataWithTxType adds an array of TxRawWithTxType to
 // dcrjson.GetBlockVerboseResult to include the stake transaction type
 type BlockDataWithTxType struct {

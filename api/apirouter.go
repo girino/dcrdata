@@ -171,14 +171,17 @@ func NewAPIRouter(app *appContext, useRealIP, compressLarge bool) apiMux {
 			rd.With(m.ChartGroupingCtx).Get("/types/{chartgrouping}", app.getAddressTxTypesData)
 			rd.With(m.ChartGroupingCtx).Get("/amountflow/{chartgrouping}", app.getAddressTxAmountFlowData)
 			rd.With(compMiddleware).Get("/raw", app.getAddressTransactionsRaw)
+			rd.With(compMiddleware).Get("/raw2", app.getAddressTransactionsRaw2)
 			rd.Route("/count/{N}", func(ri chi.Router) {
 				ri.Use(m.NPathCtx)
 				ri.Get("/", app.getAddressTransactions)
 				ri.With(compMiddleware).Get("/raw", app.getAddressTransactionsRaw)
+				ri.With(compMiddleware).Get("/raw2", app.getAddressTransactionsRaw2)
 				ri.Route("/skip/{M}", func(rj chi.Router) {
 					rj.Use(m.MPathCtx)
 					rj.Get("/", app.getAddressTransactions)
 					rj.With(compMiddleware).Get("/raw", app.getAddressTransactionsRaw)
+					rj.With(compMiddleware).Get("/raw2", app.getAddressTransactionsRaw2)
 				})
 			})
 		})
@@ -193,6 +196,13 @@ func NewAPIRouter(app *appContext, useRealIP, compressLarge bool) apiMux {
 	// Returns the charts data for the respective individual agendas.
 	mux.Route("/agenda", func(r chi.Router) {
 		r.With(m.AgendIdCtx).Get("/{agendaId}", app.getAgendaData)
+	})
+
+mux.Route("/match", func(r chi.Router) {
+		r.Route("/{address}", func(rd chi.Router) {
+			rd.Use(m.AddressPathCtx)
+			rd.With((middleware.Compress(1))).Get("/", app.getAddressTransactionsMatched)
+		})
 	})
 
 	mux.Route("/mempool", func(r chi.Router) {
